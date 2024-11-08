@@ -9,8 +9,10 @@ const Character = @import("character.zig").Character;
 const CharacterType = @import("character.zig").CharacterType;
 const Team = @import("character.zig").Team;
 
-const GRID_X = 20;
-const GRID_Y = 20;
+const hud = @import("hud.zig");
+
+const GRID_X = 200;
+const GRID_Y = 50;
 const CELL_SIZE = 50;
 
 const State = struct {
@@ -29,8 +31,8 @@ var state: State = undefined;
 pub fn main() !void {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const screenWidth = 800;
-    const screenHeight = 450;
+    const screenWidth = 1280;
+    const screenHeight = 720;
 
     rl.initWindow(screenWidth, screenHeight, "zonk");
     defer rl.closeWindow(); // Close window and OpenGL context
@@ -65,7 +67,7 @@ pub fn main() !void {
 
     // Set up characters
     try state.characters.append(Character.init(CharacterType.Warrior, 0, 0, Team.Red));
-    try state.characters.append(Character.init(CharacterType.Archer, 1, 1, Team.Blue));
+    try state.characters.append(Character.init(CharacterType.Warrior, 1, 1, Team.Blue));
 
     // Main game loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
@@ -80,6 +82,9 @@ pub fn main() !void {
         drawGrid(&state.grid);
         drawCharacters(&state.characters);
         drawHoveredCell(state.hoveredCell);
+        if (state.selectedCharacter) |character| {
+            hud.HUD.drawCharacterHUD(character, screenWidth, screenHeight);
+        }
 
         //----------------------------------------------------------------------------------
     }
