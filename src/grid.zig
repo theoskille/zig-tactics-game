@@ -4,6 +4,10 @@ const Character = @import("character.zig").Character;
 pub const GridCoord = struct {
     x: usize,
     y: usize,
+
+    pub fn equals(self: GridCoord, other: GridCoord) bool {
+        return self.x == other.x and self.y == other.y;
+    }
 };
 
 pub fn Grid(comptime T: type) type {
@@ -36,6 +40,11 @@ pub fn Grid(comptime T: type) type {
 
         pub fn set(self: *Self, x: usize, y: usize, value: T) void {
             self.data[y * self.width + x] = value;
+        }
+
+        // function that takes gridCoord and returns if it is within grid bounds
+        pub fn isWithinBounds(self: *const Self, coord: GridCoord) bool {
+            return coord.x < self.width and coord.y < self.height and coord.x >= 0 and coord.y >= 0;
         }
 
         pub fn print(self: *const Self) void {

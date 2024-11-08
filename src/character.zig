@@ -1,4 +1,5 @@
 const std = @import("std");
+const GridCoord = @import("grid.zig").GridCoord;
 
 pub const CharacterType = enum {
     Warrior,
@@ -14,7 +15,6 @@ pub const Team = enum {
 
 pub const Character = struct {
     type: CharacterType,
-    move_range: usize = 3,
     x: usize,
     y: usize,
     team: Team,
