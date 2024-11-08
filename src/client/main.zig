@@ -2,6 +2,8 @@ const std = @import("std");
 const rl = @import("raylib");
 const Vector2 = rl.Vector2;
 
+const Client = @import("network.zig").Client;
+
 const Grid = @import("grid.zig").Grid;
 const GridCoord = @import("grid.zig").GridCoord;
 
@@ -29,6 +31,21 @@ const Phase = enum { Move, Default };
 var state: State = undefined;
 
 pub fn main() !void {
+    //test networking
+    var client = try Client.init("127.0.0.1", 8080);
+    defer client.deinit();
+
+    std.debug.print("Connected to server\n", .{});
+
+    // Send a message
+    const message = "Hello";
+    try client.writeMessage(message);
+    std.debug.print("Sent message: {s}\n", .{message});
+
+    // Read response
+    var buf: [128]u8 = undefined;
+    const response = try client.readMessage(&buf);
+    std.debug.print("Server response: {s}\n", .{response});
     // Initialization
     //--------------------------------------------------------------------------------------
     const screenWidth = 1280;
