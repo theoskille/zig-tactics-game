@@ -42,3 +42,7 @@ pub const Message = struct {
         });
     }
 };
+
+pub const GameFoundPayload = struct {
+    opponent_id: u64,
+};

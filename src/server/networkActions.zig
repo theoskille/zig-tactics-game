@@ -1,6 +1,7 @@
 const std = @import("std");
 const posix = std.posix;
 const Message = @import("protocol.zig").Message;
+const MessageType = @import("protocol.zig").MessageType;
 
 pub const Reader = struct {
     buf: []u8,
@@ -79,3 +80,31 @@ pub const Reader = struct {
         self.pos = unprocessed.len;
     }
 };
+
+pub fn writeMessage(socket: posix.socket_t, msg_type: MessageType, payload: []const u8) !void {
+    var header: [6]u8 = undefined;
+    const total_len: u32 = @intCast(2 + payload.len);
+    std.mem.writeInt(u32, header[0..4], total_len, .little);
+    std.mem.writeInt(u16, header[4..6], @intFromEnum(msg_type), .little);
+
+    var vec = [2]posix.iovec_const{
+        .{ .base = &header, .len = 6 },
+        .{ .base = payload.ptr, .len = payload.len },
+    };
+
+    try writeAllVectored(socket, &vec);
+}
+
+fn writeAllVectored(socket: posix.socket_t, vec: []posix.iovec_const) !void {
+    var i: usize = 0;
+    while (true) {
+        var n = try posix.writev(socket, vec[i..]);
+        while (n >= vec[i].len) {
+            n -= vec[i].len;
+            i += 1;
+            if (i >= vec.len) return;
+        }
+        vec[i].base += n;
+        vec[i].len -= n;
+    }
+}

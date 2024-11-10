@@ -3,8 +3,18 @@ const net = std.net;
 const posix = std.posix;
 
 const Client = @import("client.zig").Client;
+const MatchMaker = @import("matchMaker.zig").MatchMaker;
+const MessageType = @import("protocol.zig").MessageType;
 
 pub fn main() !void {
+    std.debug.print("Starting server...\n", .{});
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    var matchmaker = MatchMaker.init(allocator);
+    defer matchmaker.deinit();
+
     const address = try std.net.Address.parseIp("127.0.0.1", 8080);
 
     const tpe: u32 = posix.SOCK.STREAM;
@@ -19,9 +29,6 @@ pub fn main() !void {
 
     std.debug.print("Listening on: {}\n", .{address});
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
     var pool: std.Thread.Pool = undefined;
     try std.Thread.Pool.init(&pool, .{ .allocator = allocator, .n_jobs = 64 });
 
@@ -34,40 +41,7 @@ pub fn main() !void {
             continue;
         };
 
-        const client = Client{
-            .socket = socket,
-            .address = client_address,
-        };
+        const client = try Client.init(allocator, socket, client_address, &matchmaker);
         try pool.spawn(Client.handle, .{client});
-
-        // writeMessage(socket, msg) catch |err| {
-        //     std.debug.print("Error writing to socket: {}\n", .{err});
-        // };
-    }
-}
-
-fn writeMessage(socket: posix.socket_t, msg: []const u8) !void {
-    var buf: [4]u8 = undefined;
-    std.mem.writeInt(u32, &buf, @intCast(msg.len), .little);
-
-    var vec = [2]posix.iovec_const{
-        .{ .len = 4, .base = &buf },
-        .{ .len = msg.len, .base = msg.ptr },
-    };
-
-    try writeAllVectored(socket, &vec);
-}
-
-fn writeAllVectored(socket: posix.socket_t, vec: []posix.iovec_const) !void {
-    var i: usize = 0;
-    while (true) {
-        var n = try posix.writev(socket, vec[i..]);
-        while (n >= vec[i].len) {
-            n -= vec[i].len;
-            i += 1;
-            if (i >= vec.len) return;
-        }
-        vec[i].base += n;
-        vec[i].len -= n;
     }
 }

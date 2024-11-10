@@ -2,7 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const Vector2 = rl.Vector2;
 
-// const Client = @import("network.zig").Client;
+const GameClient = @import("client.zig").GameClient;
 
 const Grid = @import("grid.zig").Grid;
 const GridCoord = @import("grid.zig").GridCoord;
@@ -32,21 +32,10 @@ pub const Phase = enum { Title_screen, Move, Default };
 var state: State = undefined;
 
 pub fn main() !void {
-    //test networking
-    // var client = try Client.init("127.0.0.1", 8080);
-    // defer client.deinit();
-
-    // std.debug.print("Connected to server\n", .{});
-
-    // // Send a message
-    // const message = "Hello world, I am theo";
-    // try client.writeMessage(message);
-    // std.debug.print("Sent message: {s}\n", .{message});
-
-    // // Read response
-    // var buf: [128]u8 = undefined;
-    // const response = try client.readMessage(&buf);
-    // std.debug.print("Server response: {s}\n", .{response});
+    // Network
+    const address = try std.net.Address.parseIp("127.0.0.1", 8080);
+    var client = try GameClient.init(address);
+    defer client.deinit();
     // Initialization
     //--------------------------------------------------------------------------------------
     const screenWidth = 1280;
@@ -88,7 +77,8 @@ pub fn main() !void {
     try state.characters.append(Character.init(CharacterType.Warrior, 1, 1, Team.Blue));
 
     //set up title screen buttons
-    var play_button = Button.init((screenWidth - 100) / 2, screenHeight / 2 - 100 - 10, 100, 75, "Play Game\x00");
+    var play_button = Button.init((screenWidth - 100) / 2, screenHeight / 2 - 100 - 10, 200, 100, "Play Game\x00");
+    var search_button = Button.init((screenWidth - 100) / 2, screenHeight / 2 - 300 - 10, 200, 100, "Search for Game\x00");
 
     // Main game loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
@@ -96,12 +86,18 @@ pub fn main() !void {
         defer rl.endDrawing();
         if (state.phase == Phase.Title_screen) {
             play_button.update(rl.getMousePosition());
+            search_button.update(rl.getMousePosition());
             if (play_button.isClicked()) {
                 state.phase = Phase.Default;
                 std.debug.print("Play button clicked\n", .{});
             }
+            if (search_button.isClicked()) {
+                try client.searchGame();
+                std.debug.print("Search button clicked\n", .{});
+            }
             rl.clearBackground(rl.Color.white);
             play_button.draw();
+            search_button.draw();
         } else {
             try update();
 
