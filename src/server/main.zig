@@ -2,6 +2,8 @@ const std = @import("std");
 const net = std.net;
 const posix = std.posix;
 
+const Client = @import("client.zig").Client;
+
 pub fn main() !void {
     const address = try std.net.Address.parseIp("127.0.0.1", 8080);
 
@@ -17,7 +19,12 @@ pub fn main() !void {
 
     std.debug.print("Listening on: {}\n", .{address});
 
-    var buf: [128]u8 = undefined;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+
+    var pool: std.Thread.Pool = undefined;
+    try std.Thread.Pool.init(&pool, .{ .allocator = allocator, .n_jobs = 64 });
+
     while (true) {
         var client_address: net.Address = undefined;
         var client_address_len: posix.socklen_t = @sizeOf(net.Address);
@@ -26,62 +33,41 @@ pub fn main() !void {
             std.debug.print("Error accepting connection: {}\n", .{err});
             continue;
         };
-        defer posix.close(socket);
 
-        std.debug.print("Accepted connection from: {}\n", .{client_address});
-
-        const msg = readMessage(socket, &buf) catch |err| {
-            std.debug.print("Error reading from socket: {}\n", .{err});
-            continue;
+        const client = Client{
+            .socket = socket,
+            .address = client_address,
         };
+        try pool.spawn(Client.handle, .{client});
 
-        std.debug.print("Received message: {d}\n", .{msg});
-
-        writeMessage(socket, msg) catch |err| {
-            std.debug.print("Error writing to socket: {}\n", .{err});
-        };
+        // writeMessage(socket, msg) catch |err| {
+        //     std.debug.print("Error writing to socket: {}\n", .{err});
+        // };
     }
 }
 
 fn writeMessage(socket: posix.socket_t, msg: []const u8) !void {
     var buf: [4]u8 = undefined;
     std.mem.writeInt(u32, &buf, @intCast(msg.len), .little);
-    try writeAll(socket, &buf);
-    try writeAll(socket, msg);
+
+    var vec = [2]posix.iovec_const{
+        .{ .len = 4, .base = &buf },
+        .{ .len = msg.len, .base = msg.ptr },
+    };
+
+    try writeAllVectored(socket, &vec);
 }
 
-fn writeAll(socket: posix.socket_t, msg: []const u8) !void {
-    var pos: usize = 0;
-    while (pos < msg.len) {
-        const bytes_written = try posix.write(socket, msg[pos..]);
-        if (bytes_written == 0) {
-            return error.Closed;
+fn writeAllVectored(socket: posix.socket_t, vec: []posix.iovec_const) !void {
+    var i: usize = 0;
+    while (true) {
+        var n = try posix.writev(socket, vec[i..]);
+        while (n >= vec[i].len) {
+            n -= vec[i].len;
+            i += 1;
+            if (i >= vec.len) return;
         }
-        pos += bytes_written;
-    }
-}
-
-fn readMessage(socket: posix.socket_t, buf: []u8) ![]u8 {
-    var header: [4]u8 = undefined;
-    try readAll(socket, &header);
-
-    const len = std.mem.readInt(u32, &header, .little);
-    if (len > buf.len) {
-        return error.BufferTooSmall;
-    }
-
-    const msg = buf[0..len];
-    try readAll(socket, msg);
-    return msg;
-}
-
-fn readAll(socket: posix.socket_t, buf: []u8) !void {
-    var into = buf;
-    while (into.len > 0) {
-        const n = try posix.read(socket, into);
-        if (n == 0) {
-            return error.Closed;
-        }
-        into = into[n..];
+        vec[i].base += n;
+        vec[i].len -= n;
     }
 }

@@ -38,7 +38,7 @@ pub fn main() !void {
     std.debug.print("Connected to server\n", .{});
 
     // Send a message
-    const message = "Hello";
+    const message = "Hello world, I am theo";
     try client.writeMessage(message);
     std.debug.print("Sent message: {s}\n", .{message});
 
