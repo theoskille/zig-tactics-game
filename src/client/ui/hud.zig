@@ -1,7 +1,7 @@
 const std = @import("std");
 const rl = @import("raylib");
 
-const Character = @import("character.zig").Character;
+const Character = @import("../entities/character.zig").Character;
 
 pub const HUD = struct {
     const ability_panel_height = 100;
