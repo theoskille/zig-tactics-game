@@ -2,7 +2,7 @@ const std = @import("std");
 const rl = @import("raylib");
 const Vector2 = rl.Vector2;
 
-const Client = @import("network.zig").Client;
+// const Client = @import("network.zig").Client;
 
 const Grid = @import("grid.zig").Grid;
 const GridCoord = @import("grid.zig").GridCoord;
@@ -12,6 +12,7 @@ const CharacterType = @import("character.zig").CharacterType;
 const Team = @import("character.zig").Team;
 
 const hud = @import("hud.zig");
+const Button = @import("button.zig").Button;
 
 const GRID_X = 200;
 const GRID_Y = 50;
@@ -26,32 +27,32 @@ const State = struct {
     characterMovePath: std.ArrayList(GridCoord),
 };
 
-const Phase = enum { Move, Default };
+pub const Phase = enum { Title_screen, Move, Default };
 
 var state: State = undefined;
 
 pub fn main() !void {
     //test networking
-    var client = try Client.init("127.0.0.1", 8080);
-    defer client.deinit();
+    // var client = try Client.init("127.0.0.1", 8080);
+    // defer client.deinit();
 
-    std.debug.print("Connected to server\n", .{});
+    // std.debug.print("Connected to server\n", .{});
 
-    // Send a message
-    const message = "Hello world, I am theo";
-    try client.writeMessage(message);
-    std.debug.print("Sent message: {s}\n", .{message});
+    // // Send a message
+    // const message = "Hello world, I am theo";
+    // try client.writeMessage(message);
+    // std.debug.print("Sent message: {s}\n", .{message});
 
-    // Read response
-    var buf: [128]u8 = undefined;
-    const response = try client.readMessage(&buf);
-    std.debug.print("Server response: {s}\n", .{response});
+    // // Read response
+    // var buf: [128]u8 = undefined;
+    // const response = try client.readMessage(&buf);
+    // std.debug.print("Server response: {s}\n", .{response});
     // Initialization
     //--------------------------------------------------------------------------------------
     const screenWidth = 1280;
     const screenHeight = 720;
 
-    rl.initWindow(screenWidth, screenHeight, "zonk");
+    rl.initWindow(screenWidth, screenHeight, "Zig Tactics");
     defer rl.closeWindow(); // Close window and OpenGL context
 
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
@@ -62,7 +63,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     state = .{
-        .phase = Phase.Default,
+        .phase = Phase.Title_screen,
         .grid = try Grid(i32).init(allocator, 8, 8),
         .characters = std.ArrayList(Character).init(allocator),
         .hoveredCell = null,
@@ -86,24 +87,33 @@ pub fn main() !void {
     try state.characters.append(Character.init(CharacterType.Warrior, 0, 0, Team.Red));
     try state.characters.append(Character.init(CharacterType.Warrior, 1, 1, Team.Blue));
 
+    //set up title screen buttons
+    var play_button = Button.init((screenWidth - 100) / 2, screenHeight / 2 - 100 - 10, 100, 75, "Play Game\x00");
+
     // Main game loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
-        try update();
-        // Draw
-        //----------------------------------------------------------------------------------
         rl.beginDrawing();
         defer rl.endDrawing();
+        if (state.phase == Phase.Title_screen) {
+            play_button.update(rl.getMousePosition());
+            if (play_button.isClicked()) {
+                state.phase = Phase.Default;
+                std.debug.print("Play button clicked\n", .{});
+            }
+            rl.clearBackground(rl.Color.white);
+            play_button.draw();
+        } else {
+            try update();
 
-        rl.clearBackground(rl.Color.white);
+            rl.clearBackground(rl.Color.white);
 
-        drawGrid(&state.grid);
-        drawCharacters(&state.characters);
-        drawHoveredCell(state.hoveredCell);
-        if (state.selectedCharacter) |character| {
-            hud.HUD.drawCharacterHUD(character, screenWidth, screenHeight);
+            drawGrid(&state.grid);
+            drawCharacters(&state.characters);
+            drawHoveredCell(state.hoveredCell);
+            if (state.selectedCharacter) |character| {
+                hud.HUD.drawCharacterHUD(character, screenWidth, screenHeight);
+            }
         }
-
-        //----------------------------------------------------------------------------------
     }
 }
 

@@ -33,7 +33,7 @@ pub const Client = struct {
                 continue;
             };
 
-            std.debug.print("Received message: {s}\n", .{msg});
+            std.debug.print("Received message: {}\n", .{msg});
         }
     }
 };

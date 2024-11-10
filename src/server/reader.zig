@@ -1,21 +1,20 @@
 const std = @import("std");
 const posix = std.posix;
+const Message = @import("protocol.zig").Message;
 
 pub const Reader = struct {
     buf: []u8,
     pos: usize = 0,
     start: usize = 0,
-
     socket: posix.socket_t,
 
-    pub fn readMessage(self: *Reader) ![]u8 {
-        var buf = self.buf;
+    pub fn readMessage(self: *Reader) !Message {
         while (true) {
             if (try self.bufferedMessage()) |msg| {
                 return msg;
             }
             const pos = self.pos;
-            const n = try posix.read(self.socket, buf[pos..]);
+            const n = try posix.read(self.socket, self.buf[pos..]);
             if (n == 0) {
                 return error.Closed;
             }
@@ -23,7 +22,7 @@ pub const Reader = struct {
         }
     }
 
-    fn bufferedMessage(self: *Reader) !?[]u8 {
+    fn bufferedMessage(self: *Reader) !?Message {
         const buf = self.buf;
         const pos = self.pos;
         const start = self.start;
@@ -31,15 +30,16 @@ pub const Reader = struct {
         std.debug.assert(pos >= start);
         const unprocessed = buf[start..pos];
 
-        if (unprocessed.len < 4) {
-            // We always need at least 4 bytes of data (the length prefix)
-            self.ensureSpace(4 - unprocessed.len) catch unreachable;
+        // Need at least length (4 bytes) + message type (2 bytes)
+        if (unprocessed.len < 6) {
+            self.ensureSpace(6 - unprocessed.len) catch unreachable;
             return null;
         }
 
+        // Read total message length (includes type + payload)
         const message_len = std.mem.readInt(u32, unprocessed[0..4], .little);
 
-        // the length of our message + the length of our prefix
+        // the total length we need is length prefix (4) + message contents (message_len)
         const total_len = message_len + 4;
 
         if (unprocessed.len < total_len) {
@@ -47,8 +47,18 @@ pub const Reader = struct {
             return null;
         }
 
+        // Read the message type (2 bytes)
+        const type_int = std.mem.readInt(u16, unprocessed[4..6], .little);
+
+        // Create the message
+        const message = Message{
+            .type = @enumFromInt(type_int),
+            // Payload is everything after the type
+            .payload = unprocessed[6..total_len],
+        };
+
         self.start += total_len;
-        return unprocessed[4..total_len];
+        return message;
     }
 
     fn ensureSpace(self: *Reader, space: usize) error{BufferTooSmall}!void {
@@ -60,14 +70,9 @@ pub const Reader = struct {
         const start = self.start;
         const spare = buf.len - start;
         if (spare >= space) {
-            // We have enough spare space in our buffer, nothing to do.
             return;
         }
 
-        // At this point, we know that our buffer is larger enough for the data
-        // we want to read, but we don't have enough spare space. We need to
-        // "compact" our buffer, moving any unprocessed data back to the start
-        // of the buffer.
         const unprocessed = buf[start..self.pos];
         std.mem.copyForwards(u8, buf[0..unprocessed.len], unprocessed);
         self.start = 0;
