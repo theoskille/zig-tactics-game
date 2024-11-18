@@ -27,9 +27,9 @@ pub fn main() !void {
     const address = try std.net.Address.parseIp("127.0.0.1", 8080);
     var client = try GameClient.init(address);
     defer client.deinit();
-
+    try client.searchGame();
     // Initialize scenes
-    var main_menu = try MainMenu.init(client);
+    var main_menu = try MainMenu.init();
 
     var game = try Game.init(allocator);
     defer game.deinit();

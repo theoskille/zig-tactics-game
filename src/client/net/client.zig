@@ -30,6 +30,7 @@ pub const GameClient = struct {
 
     pub fn init(address: std.net.Address) !GameClient {
         const socket = try std.net.tcpConnectToAddress(address);
+        std.debug.print("connected\n", .{});
         return GameClient{
             .socket = socket,
         };

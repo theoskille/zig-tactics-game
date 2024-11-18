@@ -7,15 +7,29 @@ pub const Reader = struct {
     buf: []u8,
     pos: usize = 0,
     start: usize = 0,
-    socket: posix.socket_t,
 
-    pub fn readMessage(self: *Reader) !Message {
+    pub fn init(allocator: std.mem.Allocator, size: usize) !Reader {
+        const buf = try allocator.alloc(u8, size);
+        return .{
+            .pos = 0,
+            .start = 0,
+            .buf = buf,
+        };
+    }
+
+    pub fn deinit(self: *const Reader, allocator: std.mem.Allocator) void {
+        allocator.free(self.buf);
+    }
+
+    pub fn readMessage(self: *Reader, socket: posix.socket_t) !Message {
+        var buf = self.buf;
+
         while (true) {
             if (try self.bufferedMessage()) |msg| {
                 return msg;
             }
             const pos = self.pos;
-            const n = try posix.read(self.socket, self.buf[pos..]);
+            const n = try posix.read(socket, buf[pos..]);
             if (n == 0) {
                 return error.Closed;
             }
@@ -30,17 +44,13 @@ pub const Reader = struct {
 
         std.debug.assert(pos >= start);
         const unprocessed = buf[start..pos];
-
-        // Need at least length (4 bytes) + message type (2 bytes)
         if (unprocessed.len < 6) {
             self.ensureSpace(6 - unprocessed.len) catch unreachable;
             return null;
         }
 
-        // Read total message length (includes type + payload)
         const message_len = std.mem.readInt(u32, unprocessed[0..4], .little);
-
-        // the total length we need is length prefix (4) + message contents (message_len)
+        // the length of our message + the length of our prefix
         const total_len = message_len + 4;
 
         if (unprocessed.len < total_len) {
@@ -48,13 +58,10 @@ pub const Reader = struct {
             return null;
         }
 
-        // Read the message type (2 bytes)
         const type_int = std.mem.readInt(u16, unprocessed[4..6], .little);
 
-        // Create the message
         const message = Message{
             .type = @enumFromInt(type_int),
-            // Payload is everything after the type
             .payload = unprocessed[6..total_len],
         };
 
@@ -80,31 +87,3 @@ pub const Reader = struct {
         self.pos = unprocessed.len;
     }
 };
-
-pub fn writeMessage(socket: posix.socket_t, msg_type: MessageType, payload: []const u8) !void {
-    var header: [6]u8 = undefined;
-    const total_len: u32 = @intCast(2 + payload.len);
-    std.mem.writeInt(u32, header[0..4], total_len, .little);
-    std.mem.writeInt(u16, header[4..6], @intFromEnum(msg_type), .little);
-
-    var vec = [2]posix.iovec_const{
-        .{ .base = &header, .len = 6 },
-        .{ .base = payload.ptr, .len = payload.len },
-    };
-
-    try writeAllVectored(socket, &vec);
-}
-
-fn writeAllVectored(socket: posix.socket_t, vec: []posix.iovec_const) !void {
-    var i: usize = 0;
-    while (true) {
-        var n = try posix.writev(socket, vec[i..]);
-        while (n >= vec[i].len) {
-            n -= vec[i].len;
-            i += 1;
-            if (i >= vec.len) return;
-        }
-        vec[i].base += n;
-        vec[i].len -= n;
-    }
-}

@@ -6,77 +6,81 @@ const writeMessage = @import("networkActions.zig").writeMessage;
 const MatchMaker = @import("matchMaker.zig").MatchMaker;
 const Message = @import("protocol.zig").Message;
 const GameFoundPayload = @import("protocol.zig").GameFoundPayload;
+const ClientList = std.DoublyLinkedList(*Client);
+const ClientNode = ClientList.Node;
 
 pub const Client = struct {
     socket: posix.socket_t,
     address: std.net.Address,
-    matchmaker: *MatchMaker,
-    allocator: std.mem.Allocator,
+    reader: Reader,
+    to_write: []u8,
+    write_buf: []u8,
+    read_timeout: i64,
+    read_timeout_node: *ClientNode,
 
-    pub fn init(allocator: std.mem.Allocator, socket: posix.socket_t, address: std.net.Address, matchmaker: *MatchMaker) !*Client {
-        const client = try allocator.create(Client);
-        client.* = .{
-            .allocator = allocator,
+    pub fn init(allocator: std.mem.Allocator, socket: posix.socket_t, address: std.net.Address) !Client {
+        const reader = try Reader.init(allocator, 4096);
+        errdefer reader.deinit(allocator);
+
+        const write_buf = try allocator.alloc(u8, 4096);
+        errdefer allocator.free(write_buf);
+
+        return .{
+            .reader = reader,
             .socket = socket,
             .address = address,
-            .matchmaker = matchmaker,
-        };
-        return client;
-    }
-
-    pub fn deinit(self: *Client) void {
-        posix.close(self.socket);
-        self.allocator.destroy(self);
-    }
-
-    pub fn handle(self: *Client) void {
-        self._handle() catch |err| {
-            std.debug.print("[{any}] client handle error: {}\n", .{ self.address, err });
+            .to_write = &.{},
+            .write_buf = write_buf,
+            .read_timeout = 0, // let the server set this
+            .read_timeout_node = undefined, // hack/ugly, let the server set this when init returns
         };
     }
 
-    fn _handle(self: *Client) !void {
-        const socket = self.socket;
+    pub fn deinit(self: *const Client, allocator: std.mem.Allocator) void {
+        self.reader.deinit(allocator);
+        allocator.free(self.write_buf);
+    }
 
-        defer self.deinit();
-        std.debug.print("{} connected\n", .{self.address});
-
-        var buf: [1024]u8 = undefined;
-        var reader = Reader{
-            .pos = 0,
-            .buf = &buf,
-            .socket = socket,
+    pub fn readMessage(self: *Client) !?Message {
+        return self.reader.readMessage(self.socket) catch |err| switch (err) {
+            error.WouldBlock => return null,
+            else => return err,
         };
+    }
 
-        while (true) {
-            const msg = reader.readMessage() catch |err| {
-                std.debug.print("Error reading from socket: {}\n", .{err});
-                continue;
-            };
-
-            std.debug.print("Received message: {}\n", .{msg});
-
-            switch (msg.type) {
-                .search_game => try self.handleSearchGame(msg),
-                else => {
-                    std.debug.print("Unknown message type: {}\n", .{msg.type});
-                },
-            }
+    pub fn writeMessage(self: *Client, msg: Message) !bool {
+        if (self.to_write.len > 0) {
+            return error.PendingMessage;
         }
+
+        if (msg.payload.len + 6 > self.write_buf.len) {
+            return error.MessageTooLarge;
+        }
+
+        std.mem.writeInt(u32, self.write_buf[0..4], @intCast(msg.payload.len), .little);
+        std.mem.writeInt(u16, self.write_buf[4..6], @intFromEnum(msg.type), .little);
+        const end = msg.payload.len + 6;
+        @memcpy(self.write_buf[6..end], msg.payload);
+
+        self.to_write = self.write_buf[0..end];
+        return self.write();
     }
 
-    fn handleSearchGame(self: *Client, msg: Message) !void {
-        std.debug.print("Handling Search Game...\n", .{});
-        _ = msg;
-        if (try self.matchmaker.addPlayer(self)) |opponent| {
-            std.debug.print("Match found!\n", .{});
-            const payload = GameFoundPayload{
-                .opponent_id = @intFromPtr(opponent),
+    pub fn write(self: *Client) !bool {
+        var buf = self.to_write;
+        defer self.to_write = buf;
+        while (buf.len > 0) {
+            const n = posix.write(self.socket, buf) catch |err| switch (err) {
+                error.WouldBlock => return false,
+                else => return err,
             };
-            var payload_bytes: [@sizeOf(GameFoundPayload)]u8 = undefined;
-            std.mem.writeInt(u64, &payload_bytes, payload.opponent_id, .little);
-            try writeMessage(self.socket, .game_found, &payload_bytes);
-            try writeMessage(opponent.socket, .game_found, &payload_bytes);
+
+            if (n == 0) {
+                return error.Closed;
+            }
+            buf = buf[n..];
+        } else {
+            return true;
         }
     }
 };

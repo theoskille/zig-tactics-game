@@ -1,7 +1,6 @@
 const std = @import("std");
 const rl = @import("raylib");
 const Vector2 = rl.Vector2;
-const GameClient = @import("../net/client.zig").GameClient;
 const InputState = @import("../systems/inputHandler.zig").InputState;
 const Button = @import("../ui/button.zig").Button;
 const Text = @import("../ui/text.zig").Text;
@@ -12,9 +11,8 @@ pub const MainMenu = struct {
     search_button: Button,
     searching_text: Text,
     searching: bool,
-    client: GameClient,
 
-    pub fn init(client: GameClient) !MainMenu {
+    pub fn init() !MainMenu {
         const play_button = Button.init((1280 - 100) / 2, 720 / 2 - 100 - 10, 200, 100, "Play Game\x00");
         const search_button = Button.init((1280 - 100) / 2, 720 / 2 - 300 - 10, 200, 100, "Search for Game\x00");
         return .{
@@ -23,7 +21,6 @@ pub const MainMenu = struct {
             .search_button = search_button,
             .searching_text = Text.init(1280 / 2 - 100, 720 / 2 - 100, 200, 100, "Searching for game...\x00"),
             .searching = false,
-            .client = client,
         };
     }
 
@@ -38,7 +35,6 @@ pub const MainMenu = struct {
             if (self.search_button.isClicked()) {
                 std.debug.print("Search button clicked\n", .{});
                 self.searching = true;
-                try self.client.searchGame();
             }
         }
     }
