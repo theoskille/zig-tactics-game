@@ -10,7 +10,9 @@ const InputState = @import("../systems/inputHandler.zig").InputState;
 const findPath = @import("../systems/astar.zig").findPath;
 const hud = @import("../ui/hud.zig");
 const Button = @import("../ui/button.zig").Button;
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 const Vector2 = rl.Vector2;
 
 const GRID_X = 200;
@@ -89,7 +91,7 @@ pub const Game = struct {
     }
 
     pub fn render(self: *Game) !void {
-        rl.clearBackground(rl.Color.white);
+        rl.ClearBackground(rl.WHITE);
 
         drawGrid(&self.state.grid);
         drawCharacters(&self.state.characters);
@@ -122,11 +124,11 @@ fn drawGrid(grid: *const Grid(i32)) void {
         for (0..grid.width) |x| {
             const value = grid.get(x, y);
             const color = switch (value) {
-                0 => rl.Color.gray,
-                1 => rl.Color.black,
-                else => rl.Color.gray,
+                0 => rl.GRAY,
+                1 => rl.BLACK,
+                else => rl.GRAY,
             };
-            rl.drawRectangle(toI32(x * CELL_SIZE + GRID_X), toI32(y * CELL_SIZE + GRID_Y), toI32(CELL_SIZE), toI32(CELL_SIZE), color);
+            rl.DrawRectangle(toI32(x * CELL_SIZE + GRID_X), toI32(y * CELL_SIZE + GRID_Y), toI32(CELL_SIZE), toI32(CELL_SIZE), color);
         }
     }
 }
@@ -134,10 +136,10 @@ fn drawGrid(grid: *const Grid(i32)) void {
 fn drawCharacters(characters: *const std.ArrayList(Character)) void {
     for (characters.items) |character| {
         const color = switch (character.team) {
-            Team.Red => rl.Color.red,
-            Team.Blue => rl.Color.blue,
+            Team.Red => rl.RED,
+            Team.Blue => rl.BLUE,
         };
-        rl.drawCircle(toI32(character.x * CELL_SIZE + GRID_X + CELL_SIZE / 2), toI32(character.y * CELL_SIZE + GRID_Y + CELL_SIZE / 2), 10, color);
+        rl.DrawCircle(toI32(character.x * CELL_SIZE + GRID_X + CELL_SIZE / 2), toI32(character.y * CELL_SIZE + GRID_Y + CELL_SIZE / 2), 10, color);
     }
 }
 
@@ -145,6 +147,6 @@ fn drawHoveredCell(hoveredCell: ?GridCoord) void {
     if (hoveredCell) |cell| {
         const x = toI32(cell.x * CELL_SIZE + GRID_X);
         const y = toI32(cell.y * CELL_SIZE + GRID_Y);
-        rl.drawRectangle(x, y, CELL_SIZE, CELL_SIZE, rl.Color.green);
+        rl.DrawRectangle(x, y, CELL_SIZE, CELL_SIZE, rl.GREEN);
     }
 }

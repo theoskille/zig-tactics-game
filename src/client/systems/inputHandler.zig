@@ -1,4 +1,6 @@
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 const Vector2 = rl.Vector2;
 
 pub const InputState = struct {
@@ -17,8 +19,8 @@ pub const InputState = struct {
 
     pub fn update(self: *InputState) void {
         // Update mouse state
-        self.mouse_pos = rl.getMousePosition();
-        const mouse_down = rl.isMouseButtonDown(.mouse_button_left);
+        self.mouse_pos = rl.GetMousePosition();
+        const mouse_down = rl.IsMouseButtonDown(rl.MOUSE_LEFT_BUTTON);
         self.mouse_clicked = !self.mouse_pressed and mouse_down;
         self.mouse_pressed = mouse_down;
     }

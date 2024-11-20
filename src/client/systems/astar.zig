@@ -48,9 +48,7 @@ pub fn findPath(
     endX: usize,
     endY: usize,
 ) !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+    const allocator = std.heap.c_allocator;
 
     var queue: std.ArrayList(*Node) = std.ArrayList(*Node).init(allocator); // Nodes to explore
     var seen = std.AutoHashMap(GridCoord, void).init(allocator); // Already explored nodes

@@ -1,5 +1,7 @@
 const std = @import("std");
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 const MainMenu = @import("scenes/mainMenu.zig").MainMenu;
 const Game = @import("scenes/game.zig").Game;
 const GameClient = @import("net/client.zig").GameClient;
@@ -14,20 +16,18 @@ pub fn main() !void {
     const screenWidth = 1280;
     const screenHeight = 720;
 
-    rl.initWindow(screenWidth, screenHeight, "Zig Tactics");
-    defer rl.closeWindow();
+    rl.InitWindow(screenWidth, screenHeight, "Zig Tactics");
+    defer rl.CloseWindow();
 
-    rl.setTargetFPS(60);
+    rl.SetTargetFPS(60);
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    const allocator = std.heap.c_allocator;
 
     //connect to server
-    const address = try std.net.Address.parseIp("127.0.0.1", 8080);
-    var client = try GameClient.init(address);
-    defer client.deinit();
-    try client.searchGame();
+    // const address = try std.net.Address.parseIp("127.0.0.1", 8080);
+    // var client = try GameClient.init(address);
+    // defer client.deinit();
+    // try client.searchGame();
     // Initialize scenes
     var main_menu = try MainMenu.init();
 
@@ -36,12 +36,12 @@ pub fn main() !void {
 
     try game.state.generateState();
 
-    const currentScene = Scene.MainMenu;
+    const currentScene = Scene.Game;
 
     // Main game loop
-    while (!rl.windowShouldClose()) { // Detect window close button or ESC key
-        rl.beginDrawing();
-        defer rl.endDrawing();
+    while (!rl.WindowShouldClose()) { // Detect window close button or ESC key
+        rl.BeginDrawing();
+        defer rl.EndDrawing();
 
         switch (currentScene) {
             Scene.MainMenu => {

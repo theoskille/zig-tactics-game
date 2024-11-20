@@ -1,5 +1,7 @@
 const std = @import("std");
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 
 pub const Text = struct {
     text: [*:0]const u8,
@@ -19,6 +21,6 @@ pub const Text = struct {
     }
 
     pub fn draw(self: Text) void {
-        rl.drawText(self.text, @intFromFloat(self.x), @intFromFloat(self.y), 20, rl.Color.black);
+        rl.DrawText(self.text, @intFromFloat(self.x), @intFromFloat(self.y), 20, rl.BLACK);
     }
 };

@@ -1,5 +1,7 @@
 const std = @import("std");
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 
 const Character = @import("../entities/character.zig").Character;
 
@@ -12,10 +14,10 @@ pub const HUD = struct {
 
     pub fn drawCharacterHUD(character: *const Character, window_width: i32, window_height: i32) void {
         // Draw bottom panel for abilities
-        rl.drawRectangle(0, window_height - ability_panel_height, window_width, ability_panel_height, rl.Color{ .r = 40, .g = 40, .b = 40, .a = 230 });
+        rl.DrawRectangle(0, window_height - ability_panel_height, window_width, ability_panel_height, rl.BLACK);
 
         // Draw right panel for stats
-        rl.drawRectangle(window_width - stats_panel_width, 0, stats_panel_width, window_height - ability_panel_height, rl.Color{ .r = 40, .g = 40, .b = 40, .a = 230 });
+        rl.DrawRectangle(window_width - stats_panel_width, 0, stats_panel_width, window_height - ability_panel_height, rl.BLACK);
 
         // Draw character stats
         drawCharacterStats(character, window_width - stats_panel_width, 0);
@@ -35,8 +37,8 @@ pub const HUD = struct {
         };
 
         // Draw character type and team
-        rl.drawText(char_type_text, x + padding, y + padding, text_size, rl.Color.white);
-        rl.drawText(team_text, x + padding, y + padding + text_size + 5, text_size, rl.Color.white);
+        rl.DrawText(char_type_text, x + padding, y + padding, text_size, rl.WHITE);
+        rl.DrawText(team_text, x + padding, y + padding + text_size + 5, text_size, rl.WHITE);
 
         // Draw health bar
         const health_bar_width = stats_panel_width - (padding * 2);
@@ -44,10 +46,10 @@ pub const HUD = struct {
         const health_percentage = @as(f32, @floatFromInt(character.health)) / @as(f32, @floatFromInt(character.max_health));
 
         // Health bar background
-        rl.drawRectangle(x + padding, y + padding + (text_size + 5) * 2, health_bar_width, health_bar_height, rl.Color.gray);
+        rl.DrawRectangle(x + padding, y + padding + (text_size + 5) * 2, health_bar_width, health_bar_height, rl.GRAY);
 
         // Health bar fill
-        rl.drawRectangle(x + padding, y + padding + (text_size + 5) * 2, @as(i32, @intFromFloat(@as(f32, @floatFromInt(health_bar_width)) * health_percentage)), health_bar_height, rl.Color.red);
+        rl.DrawRectangle(x + padding, y + padding + (text_size + 5) * 2, @as(i32, @intFromFloat(@as(f32, @floatFromInt(health_bar_width)) * health_percentage)), health_bar_height, rl.RED);
 
         // var health_text_buffer: [32]u8 = undefined;
         // const health_text = std.fmt.bufPrint(&health_text_buffer, "HP: {d}/{d}", .{ character.health, character.max_health }) catch |err| switch (err) {
@@ -67,7 +69,7 @@ pub const HUD = struct {
             const box_y = start_y;
 
             // Draw ability box background
-            rl.drawRectangle(box_x, box_y, ability_box_size, ability_box_size, rl.Color.gray);
+            rl.DrawRectangle(box_x, box_y, ability_box_size, ability_box_size, rl.GRAY);
 
             // Draw ability name
             const ability_name = switch (ability.type) {
@@ -76,7 +78,7 @@ pub const HUD = struct {
                 .Fireball => "Fire",
             };
 
-            rl.drawText(ability_name, box_x + 5, box_y + 5, 12, rl.Color.white);
+            rl.DrawText(ability_name, box_x + 5, box_y + 5, 12, rl.WHITE);
 
             // // Draw ability stats
             // if (ability.damage) |dmg| {

@@ -1,5 +1,7 @@
 const std = @import("std");
-const rl = @import("raylib");
+const rl = @cImport({
+    @cInclude("raylib.h");
+});
 const Vector2 = rl.Vector2;
 const InputState = @import("../systems/inputHandler.zig").InputState;
 const Button = @import("../ui/button.zig").Button;
@@ -40,7 +42,7 @@ pub const MainMenu = struct {
     }
 
     pub fn render(self: *MainMenu) !void {
-        rl.clearBackground(rl.Color.white);
+        rl.ClearBackground(rl.WHITE);
         if (self.searching) {
             self.searching_text.draw();
         } else {

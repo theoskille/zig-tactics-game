@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>WASM Game</title>
+    <style>
+        canvas {
+            background-color: black;
+            display: block;
+            margin: 0 auto;
+        }
+        /* Canvas must not have borders/padding for correct mouse coordinates */
+        canvas.emscripten { 
+            border: 0px none; 
+        }
+    </style>
+</head>
+<body>
+    <canvas class="emscripten" id="canvas" tabindex="-1"></canvas>
+    <script>
+        var Module = {
+            canvas: (() => {
+                var canvas = document.getElementById('canvas');
+                // Prevent default behavior for game-related keys
+                canvas.addEventListener("keydown", (e) => {
+                    if(["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                        e.preventDefault();
+                    }
+                }, false);
+                canvas.focus();
+                return canvas;
+            })()
+        };
+    </script>
+    {{{ SCRIPT }}}
+</body>
+</html>
