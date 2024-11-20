@@ -2,6 +2,7 @@ const std = @import("std");
 const posix = std.posix;
 const Message = @import("protocol.zig").Message;
 const MessageType = @import("protocol.zig").MessageType;
+const Frame = @import("protocol.zig").Frame;
 
 pub const Reader = struct {
     buf: []u8,
@@ -21,52 +22,74 @@ pub const Reader = struct {
         allocator.free(self.buf);
     }
 
-    pub fn readMessage(self: *Reader, socket: posix.socket_t) !Message {
-        var buf = self.buf;
-
+    pub fn readFrame(self: *Reader, socket: posix.socket_t) !Frame {
         while (true) {
-            if (try self.bufferedMessage()) |msg| {
-                return msg;
+            if (try self.bufferedFrame()) |frame| {
+                return frame;
             }
             const pos = self.pos;
-            const n = try posix.read(socket, buf[pos..]);
-            if (n == 0) {
-                return error.Closed;
-            }
-            self.pos = pos + n;
+            const n = try posix.read(socket, self.buf[pos..]);
+            if (n == 0) return error.Closed;
+            self.pos += n;
         }
     }
 
-    fn bufferedMessage(self: *Reader) !?Message {
-        const buf = self.buf;
-        const pos = self.pos;
-        const start = self.start;
+    fn bufferedFrame(self: *Reader) !?Frame {
+        const unprocessed = self.buf[self.start..self.pos];
+        if (unprocessed.len < 2) return null;
 
-        std.debug.assert(pos >= start);
-        const unprocessed = buf[start..pos];
-        if (unprocessed.len < 6) {
-            self.ensureSpace(6 - unprocessed.len) catch unreachable;
-            return null;
+        const fin = (unprocessed[0] & 0x80) != 0;
+        const opcode = @as(u4, @truncate(unprocessed[0] & 0x0F));
+        const mask = (unprocessed[1] & 0x80) != 0;
+        const payload_len = @as(u7, @truncate(unprocessed[1] & 0x7F));
+
+        var header_size: usize = 2;
+        if (payload_len == 126) {
+            header_size += 2;
+        } else if (payload_len == 127) {
+            header_size += 8;
+        }
+        if (mask) header_size += 4;
+
+        if (unprocessed.len < header_size) return null;
+
+        var final_payload_len: u64 = payload_len;
+        var current_pos: usize = 2;
+        if (payload_len == 126) {
+            final_payload_len = std.mem.readInt(u16, unprocessed[2..4], .big);
+            current_pos += 2;
+        } else if (payload_len == 127) {
+            final_payload_len = std.mem.readInt(u64, unprocessed[2..10], .big);
+            current_pos += 8;
         }
 
-        const message_len = std.mem.readInt(u32, unprocessed[0..4], .little);
-        // the length of our message + the length of our prefix
-        const total_len = message_len + 4;
+        const total_size = header_size + final_payload_len;
+        if (unprocessed.len < total_size) return null;
 
-        if (unprocessed.len < total_len) {
-            try self.ensureSpace(total_len);
-            return null;
+        var mask_key: ?[4]u8 = null;
+        if (mask) {
+            mask_key = unprocessed[current_pos..][0..4].*;
+            current_pos += 4;
         }
 
-        const type_int = std.mem.readInt(u16, unprocessed[4..6], .little);
+        const payload = unprocessed[current_pos .. current_pos + final_payload_len];
 
-        const message = Message{
-            .type = @enumFromInt(type_int),
-            .payload = unprocessed[6..total_len],
+        if (mask) {
+            for (payload, 0..) |*byte, i| {
+                byte.* ^= mask_key.?[i % 4];
+            }
+        }
+
+        self.start += total_size;
+
+        return Frame{
+            .fin = fin,
+            .opcode = opcode,
+            .mask = mask,
+            .payload_length = final_payload_len,
+            .mask_key = mask_key,
+            .payload = payload,
         };
-
-        self.start += total_len;
-        return message;
     }
 
     fn ensureSpace(self: *Reader, space: usize) error{BufferTooSmall}!void {

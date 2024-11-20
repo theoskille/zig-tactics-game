@@ -68,6 +68,7 @@ pub const Server = struct {
 
         while (true) {
             const next_timeout = self.enforceTimeout();
+            std.debug.print("polling...\n", .{});
             _ = try posix.poll(self.polls[0 .. self.connected + 1], next_timeout);
             if (self.polls[0].revents != 0) {
                 self.accept(listener) catch |err| log.err("failed to accept: {}", .{err});
@@ -75,6 +76,8 @@ pub const Server = struct {
 
             var i: usize = 0;
             while (i < self.connected) {
+                // std.debug.print("i: {}\n", .{i});
+                // std.debug.print("connected: {}\n", .{self.connected});
                 const revents = self.client_polls[i].revents;
                 if (revents == 0) {
                     //not ready, skip
@@ -84,28 +87,37 @@ pub const Server = struct {
 
                 var client = self.clients[i];
                 if (revents & posix.POLL.IN == posix.POLL.IN) {
-                    //socket ready to read
-                    while (true) {
-                        const msg = client.readMessage() catch {
-                            self.removeClient(i);
-                            break;
-                        } orelse {
-                            i += 1;
-                            break;
-                        };
+                    std.debug.print("reading from: {}\n", .{client.address});
+                    if (client.websocketHandshakeCompleted) {
+                        //socket ready to read
+                        while (true) {
+                            const frame = client.readFrame() catch {
+                                std.debug.print("error reading message\n", .{});
+                                self.removeClient(i);
+                                break;
+                            } orelse {
+                                i += 1;
+                                break;
+                            };
+                            std.debug.print("Frame received: {}\n", .{frame});
+                            std.debug.print("Frame payload: {s}\n", .{frame.payload});
 
-                        client.read_timeout = std.time.milliTimestamp() + READ_TIMEOUT_MS;
-                        read_timeout_list.remove(client.read_timeout_node);
-                        read_timeout_list.append(client.read_timeout_node);
+                            client.read_timeout = std.time.milliTimestamp() + READ_TIMEOUT_MS;
+                            read_timeout_list.remove(client.read_timeout_node);
+                            read_timeout_list.append(client.read_timeout_node);
 
-                        const written = client.writeMessage(msg) catch {
-                            self.removeClient(i);
-                            break;
-                        };
-                        if (written == false) {
-                            self.client_polls[i].events = posix.POLL.OUT;
-                            break;
+                            const written = client.writeFrame(frame.payload) catch {
+                                self.removeClient(i);
+                                break;
+                            };
+                            if (written == false) {
+                                self.client_polls[i].events = posix.POLL.OUT;
+                                break;
+                            }
                         }
+                    } else {
+                        try client.readWebsocketUpgradeRequest();
+                        i += 1;
                     }
                 } else if (revents & posix.POLL.OUT == posix.POLL.OUT) {
                     //socket ready to write
@@ -188,7 +200,7 @@ pub const Server = struct {
         defer {
             posix.close(client.socket);
             self.client_node_pool.destroy(client.read_timeout_node);
-            client.deinit(self.allocator);
+            client.deinit();
             self.client_pool.destroy(client);
         }
 

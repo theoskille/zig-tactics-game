@@ -1,6 +1,15 @@
 const std = @import("std");
 const posix = std.posix;
 
+pub const Frame = struct {
+    fin: bool,
+    opcode: u4,
+    mask: bool,
+    payload_length: u64,
+    mask_key: ?[4]u8,
+    payload: []u8,
+};
+
 pub const MessageType = enum(u16) {
     // System: 0-999
     ping = 0,
