@@ -20,8 +20,9 @@ pub const Client = struct {
     read_timeout_node: *ClientNode,
     websocketHandshakeCompleted: bool,
     allocator: std.mem.Allocator,
+    client_polls_index: usize,
 
-    pub fn init(allocator: std.mem.Allocator, socket: posix.socket_t, address: std.net.Address) !Client {
+    pub fn init(allocator: std.mem.Allocator, socket: posix.socket_t, address: std.net.Address, client_polls_index: usize) !Client {
         const reader = try Reader.init(allocator, 4096);
         errdefer reader.deinit(allocator);
 
@@ -38,6 +39,7 @@ pub const Client = struct {
             .read_timeout_node = undefined, // hack/ugly, let the server set this when init returns
             .websocketHandshakeCompleted = false,
             .allocator = allocator,
+            .client_polls_index = client_polls_index,
         };
     }
 
@@ -89,7 +91,7 @@ pub const Client = struct {
         }
     }
 
-    pub fn readFrame(self: *Client) !?Frame {
+    pub fn readMessage(self: *Client) !?Frame {
         return self.reader.readFrame(self.socket) catch |err| switch (err) {
             error.WouldBlock => return null,
             else => return err,
